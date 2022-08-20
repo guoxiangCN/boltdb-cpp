@@ -26,12 +26,27 @@ void Page::HexDump(int bytes) const {
 }
 
 BranchPageElement* Page::GetBranchPageElementAt(uint16_t index) {
-  return nullptr;
+  auto* base = reinterpret_cast<BranchPageElement*>(data);
+  return base + index;
 }
 
 std::vector<BranchPageElement*> Page::GetBranchPageElements() {
   std::vector<BranchPageElement*> vec;
   auto* base = reinterpret_cast<BranchPageElement*>(data);
+  for (int i = 0; i < count; i++) {
+    vec.push_back(base++);
+  }
+  return vec;
+}
+
+LeafPageElement* Page::GetLeafPageElementAt(uint16_t index) {
+  auto* base = reinterpret_cast<LeafPageElement*>(data);
+  return base + index;
+}
+
+std::vector<LeafPageElement*> Page::GetLeafPageElements() {
+  std::vector<LeafPageElement*> vec;
+  auto* base = reinterpret_cast<LeafPageElement*>(data);
   for (int i = 0; i < count; i++) {
     vec.push_back(base++);
   }
