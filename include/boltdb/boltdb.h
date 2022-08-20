@@ -8,6 +8,18 @@
 #include "boltdb/slice.h"
 #include "boltdb/status.h"
 
+#ifndef BOLTDB_MAX_MMAP_SIZE
+#if defined(__amd64__) || defined(__amd64) || defined(__x86_64__) || \
+    defined(__x86_64) || defined(_M_X64) || defined(_M_AMD64) ||     \
+    defined(_M_ARM64)
+#define BOLTDB_MAX_MMAP_SIZE (0xFFFFFFFFFFFF)  // 256TB
+#define BOLTDB_MAX_ALLOC_SIZE (0x7FFFFFFF)
+#else
+#define BOLTDB_MAX_MMAP_SIZE (0x7FFFFFFF)  // 2GB
+#define BOLTDB_MAX_ALLOC_SIZE (0xFFFFFFF)
+#endif
+#endif
+
 namespace boltdb {
 
 using pgid_t = uint64_t;
@@ -59,10 +71,11 @@ struct __attribute__((packed)) Page {
 
 /**
  * @brief An page element representation of bplus-tree's branch page.
- * 
+ *
  * BranchPage:
  * ---------------------------------------------------------------------------------
- * | PageHeader | BranchPageElement-1 | ... | BranchPageElement-N | k1 | ... | k-N | 
+ * | PageHeader | BranchPageElement-1 | ... | BranchPageElement-N | k1 | ... |
+ * k-N |
  * ---------------------------------------------------------------------------------
  * ----------------------------------------------
  * | pos(uint32) | keysz(uint32) | pgid(uint64) |
@@ -78,10 +91,11 @@ struct __attribute__((packed)) BranchPageElement {
 
 /**
  * @brief An page element representation of bplus-tree's leaf page.
- * 
+ *
  * LeafPage:
  * -------------------------------------------------------------------------------------
- * | PageHeader | LeafPageElement-1 | ... | LeafPageElement-N | k1 | v1 | k2 | v2 | ... |
+ * | PageHeader | LeafPageElement-1 | ... | LeafPageElement-N | k1 | v1 | k2 |
+ * v2 | ... |
  * -------------------------------------------------------------------------------------
  * ---------------------------------------------------------------
  * | flags(uint32) | pos(uint32) | ksize(uint32) | vsize(uint64) |
@@ -112,7 +126,7 @@ struct PageInfo {
 // then its root page can be stored inline in the "value", after the bucket
 // header. In the case of inline buckets, the "root" will be 0.
 struct Bucket {
-  pgid_t root;          // page id of the bucket's root-level page
+  pgid_t root;        // page id of the bucket's root-level page
   uint64_t sequence;  // monotonically incrementing, used by NextSequence()
 };
 
@@ -163,6 +177,21 @@ struct Options {
         .mlock = true,
     };
   }
+};
+
+class DB {
+ public:
+  DB(const DB&) = delete;
+  DB& operator=(const DB&) = delete;
+
+  std::string Path() const;
+  std::string String() const;
+  std::string GoString() const;
+  Status Sync();
+  bool IsReadOnly() const;
+  static Status Open(const std::string& path, Options& opts, DB** dbptr);
+
+ private:
 };
 
 }  // namespace boltdb
