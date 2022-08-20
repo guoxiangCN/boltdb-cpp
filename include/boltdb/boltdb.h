@@ -3,6 +3,8 @@
 
 #include <chrono>
 #include <cstdint>
+#include <map>
+#include <set>
 #include <vector>
 
 #include "boltdb/slice.h"
@@ -11,7 +13,7 @@
 #ifndef BOLTDB_MAX_MMAP_SIZE
 #if defined(__amd64__) || defined(__amd64) || defined(__x86_64__) || \
     defined(__x86_64) || defined(_M_X64) || defined(_M_AMD64) ||     \
-    defined(_M_ARM64)
+    defined(_M_ARM64) || defined(__aarch64__) || defined(__RISCV64__)
 #define BOLTDB_MAX_MMAP_SIZE (0xFFFFFFFFFFFF)  // 256TB
 #define BOLTDB_MAX_ALLOC_SIZE (0x7FFFFFFF)
 #else
@@ -23,6 +25,7 @@
 namespace boltdb {
 
 using pgid_t = uint64_t;
+using pgidset_t = std::set<pgid_t>;
 using pgids_t = std::vector<pgid_t>;
 using txid_t = uint64_t;
 
@@ -30,6 +33,9 @@ using txid_t = uint64_t;
 struct Meta;
 struct BranchPageElement;
 struct LeafPageElement;
+struct BucketHdr;
+struct Bucket;
+struct Tx;
 
 // PageFlags defination.
 static constexpr uint64_t kPageFlagBranch = 1;
@@ -61,10 +67,8 @@ struct __attribute__((packed)) Page {
   std::string Type() const;
   Meta* AsMeta();
   void HexDump(int bytes) const;
-
   BranchPageElement* GetBranchPageElementAt(uint16_t index);
   std::vector<BranchPageElement*> GetBranchPageElements();
-
   LeafPageElement* GetLeafPageElementAt(uint16_t index);
   std::vector<LeafPageElement*> GetLeafPageElements();
 };
@@ -73,10 +77,9 @@ struct __attribute__((packed)) Page {
  * @brief An page element representation of bplus-tree's branch page.
  *
  * BranchPage:
- * ---------------------------------------------------------------------------------
- * | PageHeader | BranchPageElement-1 | ... | BranchPageElement-N | k1 | ... |
- * k-N |
- * ---------------------------------------------------------------------------------
+ * -----------------------------------------------------------------------------
+ * | PageHeader | BranchPageElement1 | ... | BranchPageElementN | k1 |...| kN |
+ * -----------------------------------------------------------------------------
  * ----------------------------------------------
  * | pos(uint32) | keysz(uint32) | pgid(uint64) |
  * ----------------------------------------------
@@ -93,10 +96,9 @@ struct __attribute__((packed)) BranchPageElement {
  * @brief An page element representation of bplus-tree's leaf page.
  *
  * LeafPage:
- * -------------------------------------------------------------------------------------
- * | PageHeader | LeafPageElement-1 | ... | LeafPageElement-N | k1 | v1 | k2 |
- * v2 | ... |
- * -------------------------------------------------------------------------------------
+ * --------------------------------------------------------------------------
+ * | PageHeader | LeafPageElement1 | ... | LeafPageElementN |k1|v1|k2|v2|...|
+ * --------------------------------------------------------------------------
  * ---------------------------------------------------------------
  * | flags(uint32) | pos(uint32) | ksize(uint32) | vsize(uint64) |
  * ---------------------------------------------------------------
@@ -125,7 +127,7 @@ struct PageInfo {
 // This is stored as the "value" of a bucket key. If the bucket is small enough,
 // then its root page can be stored inline in the "value", after the bucket
 // header. In the case of inline buckets, the "root" will be 0.
-struct Bucket {
+struct BucketHdr {
   pgid_t root;        // page id of the bucket's root-level page
   uint64_t sequence;  // monotonically incrementing, used by NextSequence()
 };
@@ -135,7 +137,7 @@ struct __attribute__((packed)) Meta {
   uint32_t version;
   uint32_t pageSize;
   uint32_t flags;
-  Bucket root;
+  BucketHdr root;
   pgid_t freelist;
   pgid_t pgid;
   txid_t txid;
@@ -146,12 +148,20 @@ struct __attribute__((packed)) Meta {
   uint64_t Sum64() const;
 };
 
-constexpr uint64_t kMaxMmapStep = 1 << 30;
-constexpr uint64_t kVersion = 2;
-constexpr uint32_t kMagic = 0xED0CDAED;
+static constexpr uint64_t kMaxMmapStep = 1 << 30;
+static constexpr uint64_t kVersion = 2;
+static constexpr uint32_t kMagic = 0xED0CDAED;
 
-constexpr uint64_t kPageHeaderSize = sizeof(Page);
-constexpr uint64_t kMinKeysPerPage = 2;
+static constexpr uint64_t kPageHeaderSize = sizeof(Page);
+static constexpr uint64_t kMinKeysPerPage = 2;
+
+static constexpr uint64_t kMaxKeySize = 32768;
+static constexpr uint64_t kMaxValueSize = ((1 << 31) - 2);
+
+static constexpr uint64_t kBucketHeaderSize = sizeof(Bucket);
+static constexpr double kMinBucketFillPercent = 0.1;
+static constexpr double kMaxBucketFillPercent = 1.0;
+static constexpr double kDefaultBucketFillPercent = 1.0;
 
 struct Options {
   std::chrono::milliseconds timeout;

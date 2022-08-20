@@ -3,7 +3,10 @@
 
 namespace boltdb {
 
-class Status {};
+class Status {
+public:
+ static Status OK();
+};
 }
 
 #endif

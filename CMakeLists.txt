@@ -6,7 +6,14 @@ add_subdirectory(deps/googletest)
 include_directories(include)
 include_directories(deps/googletest/googletest/include)
 
-add_library(boltdb-static page.cc node.cc)
+SET(SRCS page.cc 
+         node.cc 
+         fsync.cc 
+         status.cc)
 
+# static library
+add_library(boltdb-static ${SRCS})
+
+# testcases
 add_executable(page_test tests/page_test.cc)
 target_link_libraries(page_test boltdb-static gtest)
