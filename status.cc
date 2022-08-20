@@ -7,6 +7,12 @@ Status Status::OK() {
   return Status();
 }
 
+Status Status::NotFound() {
+  // TODO
+  return Status();
+}
+
+
 Status Status::Invalid() {
   // TODO
   return Status();
@@ -18,6 +24,16 @@ Status Status::VersionMismatch() {
 }
 
 Status Status::Checksum() {
+  // TODO
+  return Status();
+}
+
+Status Status::AlreadyExists() {
+  // TODO
+  return Status();
+}
+
+Status Status::InvalidName() {
   // TODO
   return Status();
 }

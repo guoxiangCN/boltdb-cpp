@@ -33,4 +33,10 @@ TxStats TxStats::Sub(const TxStats& other) {
   diff.write_time = this->write_time - other.write_time;
   return diff;
 }
+
+int64_t Tx::Size() const {
+    // TODO
+    return 0;
+}
+
 }  // namespace boltdb

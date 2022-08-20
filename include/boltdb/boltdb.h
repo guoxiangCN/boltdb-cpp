@@ -3,6 +3,8 @@
 
 #include <chrono>
 #include <cstdint>
+#include <functional>
+#include <list>
 #include <map>
 #include <set>
 #include <vector>
@@ -35,7 +37,9 @@ struct BranchPageElement;
 struct LeafPageElement;
 struct BucketHdr;
 struct Bucket;
-struct Tx;
+class Tx;
+class DB;
+class Cursor;
 
 // PageFlags defination.
 static constexpr uint64_t kPageFlagBranch = 1;
@@ -202,6 +206,94 @@ struct TxStats {
 
   void Add(const TxStats& other);
   TxStats Sub(const TxStats& other);
+};
+
+// Tx represents a read-only or read/write transaction on the database.
+// Read-only transactions can be used for retrieving values for keys and
+// creating cursors. Read/write transactions can create and remove buckets and
+// create and remove keys.
+//
+// IMPORTANT: You must commit or rollback transactions when you are done with
+// them. Pages can not be reclaimed by the writer until no more transactions
+// are using them. A long running read transaction can cause the database to
+// quickly grow.
+class Tx {
+ public:
+  explicit Tx(DB* db);
+  ~Tx();
+
+  // ID returns the transaction id.
+  int ID() const { return int(this->meta_->txid); }
+
+  // DB returns a reference to the database that created the transaction.
+  DB* GetDB() const { return this->db_; }
+
+  // Size returns current database size in bytes as seen by this transaction.
+  int64_t Size() const;
+
+  // Writable returns whether the transaction can perform write operations.
+  bool Writable() const { return writable_; }
+
+  // Cursor creates a cursor associated with the root bucket.
+  // All items in the cursor will return a nil value because all root bucket
+  // keys point to buckets. The cursor is only valid as long as the transaction
+  // is open. Do not use a cursor after the transaction is closed.
+  Cursor* Cursor();
+
+  // Stats retrieves a copy of the current transaction statistics.
+  TxStats Stats() const { return stats_; }
+
+  // Bucket retrieves a bucket by name.
+  // Returns nil if the bucket does not exist.
+  // The bucket instance is only valid for the lifetime of the transaction.
+  Bucket* GetBucket(const std::string& name);
+
+  // CreateBucket creates a new bucket.
+  // Returns an error if the bucket already exists, if the bucket name is blank,
+  // or if the bucket name is too long. The bucket instance is only valid for
+  // the lifetime of the transaction.
+  Status CreateBucket(const std::string& name, Bucket** b);
+
+  // CreateBucketIfNotExists creates a new bucket if it doesn't already exist.
+  // Returns an error if the bucket name is blank, or if the bucket name is too
+  // long. The bucket instance is only valid for the lifetime of the
+  // transaction.
+  Status CreateBucketIfNotExists(const std::string& name, Bucket** b);
+
+  // DeleteBucket deletes a bucket.
+  // Returns an error if the bucket cannot be found or if the key represents a
+  // non-bucket value.
+  Status DeleteBucket(const std::string& name);
+
+  // ForEach executes a function for each bucket in the root.
+  // If the provided function returns an error then the iteration is stopped and
+  // the error is returned to the caller.
+  Status ForEach(std::function<Status(const std::string&, Bucket*)>);
+
+  // OnCommit adds a handler function to be executed after the transaction
+  // successfully commits.
+  void OnCommit(std::function<void()>&& fn) {
+    commit_handlers_.push_back(std::move(fn));
+  }
+
+  Status Commit();
+  Status Rollback();
+
+ private:
+  Status commitFreeList();
+  void rollback();
+  void Close();
+
+ private:
+  bool writable_;
+  bool managed_;
+  DB* db_;
+  Meta* meta_;
+  // Bucket root;
+  std::map<pgid_t, Page*> pages_;
+  TxStats stats_;
+  std::list<std::function<void()>> commit_handlers_;
+  int write_flag_;
 };
 
 struct Options {
