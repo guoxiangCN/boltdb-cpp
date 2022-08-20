@@ -6,6 +6,9 @@ namespace boltdb {
 class Status {
 public:
  static Status OK();
+ static Status Invalid();
+ static Status VersionMismatch();
+ static Status Checksum();
 };
 }
 

@@ -113,6 +113,43 @@ struct __attribute__((packed)) LeafPageElement {
   Slice value();
 };
 
+// bucket represents the on-file representation of a bucket.
+// This is stored as the "value" of a bucket key. If the bucket is small enough,
+// then its root page can be stored inline in the "value", after the bucket
+// header. In the case of inline buckets, the "root" will be 0.
+struct BucketHdr {
+  pgid_t root;        // page id of the bucket's root-level page
+  uint64_t sequence;  // monotonically incrementing, used by NextSequence()
+};
+
+/**
+ * @brief An page element representation of meta page.
+ *
+ * LeafPage:
+ * ------------------------------------------------------------------
+ * | PageHeader | MetaInfo |
+ * ------------------------------------------------------------------
+ * ------------------------------------------------------------------
+ * |magic|version|pagesz|flags|buckethdr|freelist|pgid|txid|checksum|
+ * ------------------------------------------------------------------
+ */
+struct __attribute__((packed)) Meta {
+  uint32_t magic;
+  uint32_t version;
+  uint32_t page_size;
+  uint32_t flags;
+  BucketHdr root;
+  pgid_t freelist;
+  pgid_t pgid;
+  txid_t txid;
+  uint64_t checksum;
+
+  Status Validate() const;
+  void Copy(Meta* dest);
+  void Write(Page* page);
+  uint64_t Sum64() const;
+};
+
 /**
  * @brief PageInfo represents human readable information about a page.
  */
@@ -123,31 +160,6 @@ struct PageInfo {
   int overflowCount;
 };
 
-// bucket represents the on-file representation of a bucket.
-// This is stored as the "value" of a bucket key. If the bucket is small enough,
-// then its root page can be stored inline in the "value", after the bucket
-// header. In the case of inline buckets, the "root" will be 0.
-struct BucketHdr {
-  pgid_t root;        // page id of the bucket's root-level page
-  uint64_t sequence;  // monotonically incrementing, used by NextSequence()
-};
-
-struct __attribute__((packed)) Meta {
-  uint32_t magic;
-  uint32_t version;
-  uint32_t pageSize;
-  uint32_t flags;
-  BucketHdr root;
-  pgid_t freelist;
-  pgid_t pgid;
-  txid_t txid;
-  uint64_t checksum;
-
-  Status validate() const;
-  void Write(Page* page);
-  uint64_t Sum64() const;
-};
-
 static constexpr uint64_t kMaxMmapStep = 1 << 30;
 static constexpr uint64_t kVersion = 2;
 static constexpr uint32_t kMagic = 0xED0CDAED;
@@ -156,12 +168,41 @@ static constexpr uint64_t kPageHeaderSize = sizeof(Page);
 static constexpr uint64_t kMinKeysPerPage = 2;
 
 static constexpr uint64_t kMaxKeySize = 32768;
-static constexpr uint64_t kMaxValueSize = ((1 << 31) - 2);
+static constexpr uint64_t kMaxValueSize = ((uint64_t(1) << 31) - 2);
 
-static constexpr uint64_t kBucketHeaderSize = sizeof(Bucket);
+static constexpr uint64_t kBucketHeaderSize = sizeof(BucketHdr);
 static constexpr double kMinBucketFillPercent = 0.1;
 static constexpr double kMaxBucketFillPercent = 1.0;
 static constexpr double kDefaultBucketFillPercent = 1.0;
+
+struct TxStats {
+  // Page statistics.
+  int page_count;
+  int page_alloc;
+
+  // Cursor statistics.
+  int cursor_count;
+
+  // Node statistics.
+  int node_count;
+  int node_deref;
+
+  // Rebalance statistics.
+  int rebalance;
+  std::chrono::nanoseconds rebalance_time;
+
+  // Split/Spill statistics.
+  int split;
+  int spill;
+  std::chrono::nanoseconds spill_time;
+
+  // Write statistics.
+  int write;
+  std::chrono::nanoseconds write_time;
+
+  void Add(const TxStats& other);
+  TxStats Sub(const TxStats& other);
+};
 
 struct Options {
   std::chrono::milliseconds timeout;
