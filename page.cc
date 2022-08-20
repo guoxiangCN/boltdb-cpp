@@ -25,9 +25,18 @@ void Page::HexDump(int bytes) const {
   fprintf(stderr, "%s\n", buf.c_str());
 }
 
-BranchPageElement* Page::GetBranchPageElementAt(uint16_t index) {}
+BranchPageElement* Page::GetBranchPageElementAt(uint16_t index) {
+  return nullptr;
+}
 
-std::vector<BranchPageElement*> Page::GetBranchPageElements() {}
+std::vector<BranchPageElement*> Page::GetBranchPageElements() {
+  std::vector<BranchPageElement*> vec;
+  auto* base = reinterpret_cast<BranchPageElement*>(data);
+  for (int i = 0; i < count; i++) {
+    vec.push_back(base++);
+  }
+  return vec;
+}
 
 Slice BranchPageElement::key() {
   const char* ptr = reinterpret_cast<const char*>(this);

@@ -61,18 +61,17 @@ struct __attribute__((packed)) Page {
  * @brief An page element representation of bplus-tree's branch page.
  * 
  * BranchPage:
- * ----------------------------------------------------------------------------------
- * | PageHeader | BranchPageElement1 | BranchPageElement2 | BranchPageElement3 | ...
- * ----------------------------------------------------------------------------------
- * ------------------------------------------------------------
- * | pos(uint32) | keysz(uint32) | pgid(uint64) |  ...key...   |
- * ------------------------------------------------------------
+ * ---------------------------------------------------------------------------------
+ * | PageHeader | BranchPageElement-1 | ... | BranchPageElement-N | k1 | ... | k-N | 
+ * ---------------------------------------------------------------------------------
+ * ----------------------------------------------
+ * | pos(uint32) | keysz(uint32) | pgid(uint64) |
+ * ----------------------------------------------
  */
 struct __attribute__((packed)) BranchPageElement {
   uint32_t pos;
   uint32_t ksize;
   pgid_t pgid;
-  char data[0];
 
   Slice key();
 };
@@ -81,12 +80,12 @@ struct __attribute__((packed)) BranchPageElement {
  * @brief An page element representation of bplus-tree's leaf page.
  * 
  * LeafPage:
- * ----------------------------------------------------------------------------------
- * | PageHeader | LeafPageElement1 | LeafPageElement2 | LeafPageElement3 |    ...   |
- * ----------------------------------------------------------------------------------
- * ----------------------------------------------------------------------------------
- * | flags(uint32) | pos(uint32) | ksize(uint32) | vsize(uint64) |  key.. | val..   |
- * ----------------------------------------------------------------------------------
+ * -------------------------------------------------------------------------------------
+ * | PageHeader | LeafPageElement-1 | ... | LeafPageElement-N | k1 | v1 | k2 | v2 | ... |
+ * -------------------------------------------------------------------------------------
+ * ---------------------------------------------------------------
+ * | flags(uint32) | pos(uint32) | ksize(uint32) | vsize(uint64) |
+ * ---------------------------------------------------------------
  */
 struct __attribute__((packed)) LeafPageElement {
   uint32_t flags;
