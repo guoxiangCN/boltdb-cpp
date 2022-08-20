@@ -92,7 +92,6 @@ struct __attribute__((packed)) LeafPageElement {
   uint32_t pos;
   uint32_t ksize;
   uint32_t vsize;
-  char data[0];
 
   Slice key();
   Slice value();
