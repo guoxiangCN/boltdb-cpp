@@ -12,6 +12,7 @@ SET(SRCS page.cc
          db.cc
          tx.cc
          cursor.cc
+         freelist.cc
          fsync.cc 
          status.cc)
 

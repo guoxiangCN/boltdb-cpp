@@ -1,14 +1,17 @@
 #ifndef __BOLTDB_BOLTDB_H__
 #define __BOLTDB_BOLTDB_H__
 
+#include <bitset>
 #include <chrono>
 #include <cstdint>
 #include <functional>
 #include <list>
 #include <map>
 #include <set>
+#include <unordered_map>
 #include <vector>
 
+#include "boltdb/noncopyable.h"
 #include "boltdb/slice.h"
 #include "boltdb/status.h"
 
@@ -30,6 +33,7 @@ using pgid_t = uint64_t;
 using pgidset_t = std::set<pgid_t>;
 using pgids_t = std::vector<pgid_t>;
 using txid_t = uint64_t;
+using txids_t = std::vector<txid_t>;
 
 // All forward declares.
 struct Meta;
@@ -38,6 +42,8 @@ struct LeafPageElement;
 struct BucketHdr;
 struct Bucket;
 class Tx;
+class TxPending;
+class FreeList;
 class DB;
 class Cursor;
 
@@ -49,7 +55,7 @@ static constexpr uint64_t kPageFlagFreeList = 1 << 4;
 
 enum class FreeListType {
   FreeListArray,
-  FreeListHash,
+  FreeListHashMap,
 };
 
 /**
@@ -217,7 +223,7 @@ struct TxStats {
 // them. Pages can not be reclaimed by the writer until no more transactions
 // are using them. A long running read transaction can cause the database to
 // quickly grow.
-class Tx {
+class Tx : public noncopyable {
  public:
   explicit Tx(DB* db);
   ~Tx();
@@ -296,6 +302,56 @@ class Tx {
   int write_flag_;
 };
 
+// txPending holds a list of pgids and corresponding allocation txns
+// that are pending to be freed.
+class TxPending {
+ public:
+  pgids_t ids_;
+  txids_t alloc_txs_;
+  txid_t last_release_begin_;
+};
+
+// freelist represents a list of all pages that are available for allocation.
+// It also tracks pages that have been freed but are still in use by open
+// transactions.
+class FreeList : public noncopyable {
+ public:
+  using allocate_fn_t = pgid_t (*)(txid_t, int);
+  using free_count_fn_t = int (*)();
+  using merge_spans_fn_t = void (*)(pgidset_t);
+  using get_freepageid_fn_t = pgids_t (*)();
+  using readid_fn_t = void (*)(pgids_t);
+
+ public:
+  // Construct an empty but initialized freelist.
+  explicit FreeList(FreeListType typ);
+  // size returns the size of the page after serialization.
+  int Size();
+  // count returns count of pages on the freelist
+  int Count();
+  // arrayFreeCount returns count of free pages(array version)
+  int ArrayFreeCount();
+  // pending_count returns count of pending pages
+  int PendingCount();
+
+ private:
+  FreeListType freelist_type_;
+  pgids_t ids_;
+  std::unordered_map<pgid_t, txid_t> allocs_;
+  std::unordered_map<txid_t, TxPending*> pending_;
+  std::unordered_map<pgid_t, bool> cache_;
+  std::unordered_map<uint64_t, pgidset_t> freemaps_;
+  std::unordered_map<pgid_t, uint64_t> forward_map_;
+  std::unordered_map<pgid_t, uint64_t> backward_map_;
+
+ public:
+  allocate_fn_t allocate_fn_;
+  free_count_fn_t free_count_fn_;
+  merge_spans_fn_t merge_spans_fn_;
+  get_freepageid_fn_t get_freepageid_fn_;
+  readid_fn_t read_ids_fn_;
+};
+
 struct Options {
   std::chrono::milliseconds timeout;
   bool noGrowSync;
@@ -313,7 +369,7 @@ struct Options {
 
 class Cursor {};
 
-class DB {
+class DB : public noncopyable {
  public:
   DB(const DB&) = delete;
   DB& operator=(const DB&) = delete;
