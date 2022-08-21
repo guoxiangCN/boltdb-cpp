@@ -121,7 +121,7 @@ struct __attribute__((packed)) LeafPageElement {
 // This is stored as the "value" of a bucket key. If the bucket is small enough,
 // then its root page can be stored inline in the "value", after the bucket
 // header. In the case of inline buckets, the "root" will be 0.
-struct BucketHdr {
+struct dBucket {
   pgid_t root;        // page id of the bucket's root-level page
   uint64_t sequence;  // monotonically incrementing, used by NextSequence()
 };
@@ -142,7 +142,7 @@ struct __attribute__((packed)) Meta {
   uint32_t version;
   uint32_t page_size;
   uint32_t flags;
-  BucketHdr root;
+  dBucket root;
   pgid_t freelist;
   pgid_t pgid;
   txid_t txid;
@@ -174,7 +174,7 @@ static constexpr uint64_t kMinKeysPerPage = 2;
 static constexpr uint64_t kMaxKeySize = 32768;
 static constexpr uint64_t kMaxValueSize = ((uint64_t(1) << 31) - 2);
 
-static constexpr uint64_t kBucketHeaderSize = sizeof(BucketHdr);
+static constexpr uint64_t kBucketHeaderSize = sizeof(dBucket);
 static constexpr double kMinBucketFillPercent = 0.1;
 static constexpr double kMaxBucketFillPercent = 1.0;
 static constexpr double kDefaultBucketFillPercent = 1.0;
@@ -308,19 +308,10 @@ struct Options {
   bool noSync;
   bool mlock;
 
-  static Options Default() {
-    return Options{
-        .timeout = std::chrono::milliseconds(300),
-        .noGrowSync = false,
-        .noFreeListSync = false,
-        .freeListType = FreeListType::FreeListHash,
-        .readOnly = false,
-        .pageSize = 4096,
-        .noSync = false,
-        .mlock = true,
-    };
-  }
+  static Options Default();
 };
+
+class Cursor {};
 
 class DB {
  public:
@@ -335,6 +326,8 @@ class DB {
   static Status Open(const std::string& path, Options& opts, DB** dbptr);
 
  private:
+  friend class Tx;
+  int page_size_;
 };
 
 }  // namespace boltdb

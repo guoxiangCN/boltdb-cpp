@@ -9,7 +9,9 @@ include_directories(deps/googletest/googletest/include)
 SET(SRCS page.cc 
          node.cc 
          meta.cc
+         db.cc
          tx.cc
+         cursor.cc
          fsync.cc 
          status.cc)
 

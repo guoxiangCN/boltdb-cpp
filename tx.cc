@@ -35,8 +35,7 @@ TxStats TxStats::Sub(const TxStats& other) {
 }
 
 int64_t Tx::Size() const {
-    // TODO
-    return 0;
+    return meta_->pgid * (db_->page_size_);
 }
 
 }  // namespace boltdb
